@@ -54,3 +54,18 @@ fn test_sealed_bid_auction_lifecycle() {
     assert_eq!(auction.highest_bid, 75_000_000);
     assert_eq!(auction.highest_bidder, Some(bidder));
 }
+
+#[test]
+#[should_panic]
+fn cannot_create_auction_before_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let seller = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin);
+    let contract_id = env.register(SubRosaAuctionContract, ());
+    let client = SubRosaAuctionContractClient::new(&env, &contract_id);
+
+    client.create_auction(&seller, &token_contract.address(), &1, &10, &20);
+}

@@ -27,7 +27,7 @@ This repository is a Testnet candidate, not an independently audited financial p
 - [x] Finalization and refund controls
 - [ ] Indexer-backed discovery for large auction volumes
 - [ ] Wallet network/account change handling
-- [ ] Testnet deployment and live end-to-end test
+- [x] Testnet deployment and live end-to-end test
 - [ ] Mainnet deployment approval and monitoring
 
 ## Required external review

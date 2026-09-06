@@ -33,6 +33,7 @@ pub enum Error {
 }
 
 const THIRTY_DAYS_IN_LEDGERS: u32 = 518_400;
+const AUCTION_TTL_IN_LEDGERS: u32 = THIRTY_DAYS_IN_LEDGERS * 2;
 const MAX_AUCTION_DURATION_SECONDS: u64 = 2_592_000;
 
 #[contract]
@@ -64,6 +65,7 @@ impl SubRosaAuctionContract {
         bid_deadline: u64,
         reveal_deadline: u64,
     ) -> Result<u64, Error> {
+        Self::ensure_initialized(&env)?;
         Self::ensure_not_paused(&env)?;
         seller.require_auth();
 
@@ -100,8 +102,8 @@ impl SubRosaAuctionContract {
         env.storage().persistent().set(&DataKey::Auction(auction_id), &auction);
         env.storage().persistent().extend_ttl(
             &DataKey::Auction(auction_id),
-            THIRTY_DAYS_IN_LEDGERS,
-            THIRTY_DAYS_IN_LEDGERS,
+            AUCTION_TTL_IN_LEDGERS,
+            AUCTION_TTL_IN_LEDGERS,
         );
 
         env.storage().instance().set(&DataKey::NextAuctionId, &(auction_id + 1));
@@ -369,6 +371,16 @@ impl SubRosaAuctionContract {
             Err(Error::ContractPaused)
         } else {
             Ok(())
+        }
+    }
+
+    fn ensure_initialized(env: &Env) -> Result<(), Error> {
+        if env.storage().instance().has(&DataKey::Admin)
+            && env.storage().instance().has(&DataKey::Token)
+        {
+            Ok(())
+        } else {
+            Err(Error::NotInitialized)
         }
     }
 
