@@ -3,11 +3,12 @@ import {
   BASE_FEE,
   Contract,
   Networks,
-  Server,
   TransactionBuilder,
   nativeToScVal,
+  scValToNative,
   xdr,
 } from "@stellar/stellar-sdk";
+import { assembleTransaction, Server } from "@stellar/stellar-sdk/rpc";
 import { signTransaction } from "@stellar/freighter-api";
 import { Buffer } from "buffer";
 
@@ -60,7 +61,7 @@ async function submitContractCall(accountId: string, operation: xdr.Operation) {
   if ("error" in simulation) {
     throw new Error(simulation.error);
   }
-  const prepared = Server.assembleTransaction(transaction, simulation).build();
+  const prepared = assembleTransaction(transaction, simulation).build();
   const signed = await signTransaction(prepared.toXDR(), {
     networkPassphrase,
   });
@@ -81,6 +82,22 @@ async function submitContractCall(accountId: string, operation: xdr.Operation) {
   }
 
   throw new Error("Transaction submitted but confirmation timed out.");
+}
+
+async function simulateContractCall(accountId: string, operation: xdr.Operation) {
+  const server = new Server(rpcUrl);
+  const account = await server.getAccount(accountId);
+  const transaction = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(operation)
+    .setTimeout(180)
+    .build();
+  const simulation = await server.simulateTransaction(transaction);
+  if ("error" in simulation) throw new Error(simulation.error);
+  if (!simulation.result) throw new Error("Soroban simulation returned no result.");
+  return scValToNative(simulation.result.retval);
 }
 
 export async function submitSealedBid(
@@ -124,6 +141,67 @@ export async function revealBid(
       nativeToScVal(auctionId, { type: "u64" }),
       nativeToScVal(bidAmount, { type: "i128" }),
       toBytes32(fromHex(saltHex)),
+    ),
+  );
+}
+
+export async function createAuction(
+  accountId: string,
+  assetToken: string,
+  assetAmount: bigint,
+  bidDeadline: bigint,
+  revealDeadline: bigint,
+) {
+  const contract = new Contract(getContractId());
+  return submitContractCall(
+    accountId,
+    contract.call(
+      "create_auction",
+      new Address(accountId).toScVal(),
+      new Address(assetToken).toScVal(),
+      nativeToScVal(assetAmount, { type: "i128" }),
+      nativeToScVal(bidDeadline, { type: "u64" }),
+      nativeToScVal(revealDeadline, { type: "u64" }),
+    ),
+  );
+}
+
+export async function getAuction(accountId: string, auctionId: bigint) {
+  const contract = new Contract(getContractId());
+  return simulateContractCall(
+    accountId,
+    contract.call("get_auction", nativeToScVal(auctionId, { type: "u64" })),
+  );
+}
+
+export async function discoverAuctions(accountId: string, maximum = 20) {
+  const auctions = [];
+  for (let id = BigInt(1); id <= BigInt(maximum); id += BigInt(1)) {
+    try {
+      auctions.push(await getAuction(accountId, id));
+    } catch {
+      break;
+    }
+  }
+  return auctions;
+}
+
+export async function finalizeAuction(accountId: string, auctionId: bigint) {
+  const contract = new Contract(getContractId());
+  return submitContractCall(
+    accountId,
+    contract.call("finalize_auction", nativeToScVal(auctionId, { type: "u64" })),
+  );
+}
+
+export async function claimRefund(accountId: string, auctionId: bigint) {
+  const contract = new Contract(getContractId());
+  return submitContractCall(
+    accountId,
+    contract.call(
+      "claim_refund",
+      nativeToScVal(auctionId, { type: "u64" }),
+      new Address(accountId).toScVal(),
     ),
   );
 }

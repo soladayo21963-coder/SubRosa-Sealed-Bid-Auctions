@@ -2,7 +2,15 @@
 
 import React, { useState } from "react";
 import { connectWallet } from "@/lib/freighter";
-import { createCommitment, revealBid, submitSealedBid } from "@/lib/soroban";
+import {
+  claimRefund,
+  createAuction,
+  createCommitment,
+  discoverAuctions,
+  finalizeAuction,
+  revealBid,
+  submitSealedBid,
+} from "@/lib/soroban";
 
 export default function SubRosaDashboard() {
   const [account, setAccount] = useState<string | null>(null);
@@ -12,11 +20,60 @@ export default function SubRosaDashboard() {
   const [revealSalt, setRevealSalt] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [auctions, setAuctions] = useState<Array<Record<string, unknown>>>([]);
+  const [assetToken, setAssetToken] = useState("");
+  const [assetAmount, setAssetAmount] = useState("1");
+  const [bidDeadline, setBidDeadline] = useState("");
+  const [revealDeadline, setRevealDeadline] = useState("");
 
   const handleConnect = async () => {
     const addr = await connectWallet();
     if (addr) {
       setAccount(addr);
+    }
+  };
+
+  const handleDiscover = async () => {
+    if (!account) return;
+    setLoading(true);
+    try {
+      setAuctions(await discoverAuctions(account));
+      setMessage("Auction list refreshed.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to load auctions.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateAuction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!account) return;
+    setLoading(true);
+    try {
+      const hash = await createAuction(
+        account,
+        assetToken,
+        BigInt(assetAmount),
+        BigInt(bidDeadline),
+        BigInt(revealDeadline),
+      );
+      setMessage(`Auction created. Transaction: ${hash}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to create auction.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runAuctionAction = async (action: () => Promise<string>, success: string) => {
+    setLoading(true);
+    try {
+      setMessage(`${success}: ${await action()}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Transaction failed.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -87,6 +144,39 @@ export default function SubRosaDashboard() {
           </button>
         ) : (
           <>
+            <div className="mb-8 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-5">
+              <div className="text-xs text-slate-400 break-all">{account}</div>
+              <button onClick={handleDiscover} disabled={loading} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-60">
+                Refresh auctions
+              </button>
+            </div>
+
+            {auctions.length > 0 && (
+              <section className="mb-8 space-y-3">
+                <h2 className="text-sm font-semibold text-slate-200">Available auctions</h2>
+                {auctions.map((auction, index) => (
+                  <div key={index} className="rounded-lg border border-slate-800 bg-slate-950 p-4 text-xs text-slate-300">
+                    <div className="flex justify-between gap-3"><span>Auction {String(auction.id)}</span><span>{String(auction.status)}</span></div>
+                    <div className="mt-2">Highest bid: {String(auction.highest_bid)}</div>
+                    <div className="mt-3 flex gap-2">
+                      <button onClick={() => setAuctionId(String(auction.id))} className="rounded border border-rose-800 px-2 py-1 text-rose-300">Use auction</button>
+                      <button onClick={() => runAuctionAction(() => finalizeAuction(account, BigInt(String(auction.id))), "Finalized") } className="rounded border border-slate-700 px-2 py-1">Finalize</button>
+                      <button onClick={() => runAuctionAction(() => claimRefund(account, BigInt(String(auction.id))), "Refund claimed") } className="rounded border border-slate-700 px-2 py-1">Claim refund</button>
+                    </div>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            <form onSubmit={handleCreateAuction} className="mb-8 space-y-4 border-b border-slate-800 pb-8">
+              <h2 className="text-sm font-semibold text-slate-200">Create auction</h2>
+              <input required value={assetToken} onChange={(e) => setAssetToken(e.target.value)} placeholder="Asset token contract address" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs font-mono text-white" />
+              <input required type="number" min="1" value={assetAmount} onChange={(e) => setAssetAmount(e.target.value)} placeholder="Asset amount" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs font-mono text-white" />
+              <input required type="number" min="1" value={bidDeadline} onChange={(e) => setBidDeadline(e.target.value)} placeholder="Bid deadline: Unix seconds" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs font-mono text-white" />
+              <input required type="number" min="1" value={revealDeadline} onChange={(e) => setRevealDeadline(e.target.value)} placeholder="Reveal deadline: Unix seconds" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs font-mono text-white" />
+              <button type="submit" disabled={loading} className="w-full rounded-xl border border-rose-700 py-3 font-semibold text-rose-300 hover:bg-rose-950 disabled:opacity-60">Create and escrow asset</button>
+            </form>
+
             <form onSubmit={handleBid} className="space-y-6">
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">Auction ID</label>
