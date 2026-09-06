@@ -1,4 +1,4 @@
-name: CI
+name: SubRosa Verification
 
 on:
   push:
