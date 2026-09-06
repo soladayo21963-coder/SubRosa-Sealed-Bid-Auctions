@@ -1,0 +1,82 @@
+import {
+  Address,
+  BASE_FEE,
+  Contract,
+  Networks,
+  Server,
+  TransactionBuilder,
+  nativeToScVal,
+  xdr,
+} from "@stellar/stellar-sdk";
+import { signTransaction } from "@stellar/freighter-api";
+
+const networkPassphrase = Networks.TESTNET;
+const rpcUrl = "https://soroban-testnet.stellar.org";
+const horizonUrl = "https://horizon-testnet.stellar.org";
+
+function getContractId() {
+  const contractId = process.env.NEXT_PUBLIC_SUBROSA_CONTRACT_ID;
+  if (!contractId) {
+    throw new Error("NEXT_PUBLIC_SUBROSA_CONTRACT_ID is not configured.");
+  }
+  return contractId;
+}
+
+function toBytes32(value: Uint8Array) {
+  return xdr.ScVal.scvBytes(Buffer.from(value));
+}
+
+export async function createCommitment(bidAmount: bigint, salt: Uint8Array) {
+  const amount = new Uint8Array(16);
+  new DataView(amount.buffer).setBigInt64(0, bidAmount);
+  const payload = new Uint8Array(amount.length + salt.length);
+  payload.set(amount, 0);
+  payload.set(salt, amount.length);
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", payload));
+}
+
+async function submitContractCall(accountId: string, operation: xdr.Operation) {
+  const server = new Server(rpcUrl);
+  const account = await server.getAccount(accountId);
+  const transaction = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(operation)
+    .setTimeout(180)
+    .build();
+  const simulation = await server.simulateTransaction(transaction);
+  if ("error" in simulation) {
+    throw new Error(simulation.error);
+  }
+  const prepared = Server.assembleTransaction(transaction, simulation).build();
+  const signed = await signTransaction(prepared.toXDR(), {
+    networkPassphrase,
+  });
+  const result = await server.sendTransaction(
+    TransactionBuilder.fromXDR(signed.signedTxXdr, networkPassphrase),
+  );
+  if (result.status === "ERROR") {
+    throw new Error("Soroban transaction was rejected.");
+  }
+  return result.hash;
+}
+
+export async function submitSealedBid(
+  accountId: string,
+  auctionId: bigint,
+  commitment: Uint8Array,
+  collateral: bigint,
+) {
+  const contract = new Contract(getContractId());
+  return submitContractCall(
+    accountId,
+    contract.call(
+      "submit_sealed_bid",
+      new Address(accountId).toScVal(),
+      nativeToScVal(auctionId, { type: "u64" }),
+      toBytes32(commitment),
+      nativeToScVal(collateral, { type: "i128" }),
+    ),
+  );
+}

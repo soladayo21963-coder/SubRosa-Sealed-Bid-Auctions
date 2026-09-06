@@ -25,6 +25,10 @@ pub enum Error {
     ContractPaused = 12,
     MissingBid = 13,
     InvalidBidder = 14,
+    AlreadySettled = 15,
+    SettlementNotOpen = 16,
+    CannotRefundWinner = 17,
+    AlreadyRefunded = 18,
 }
 
 const THIRTY_DAYS_IN_LEDGERS: u32 = 518_400;
@@ -54,6 +58,7 @@ impl SubRosaAuctionContract {
         env: Env,
         seller: Address,
         asset_token: Address,
+        asset_amount: i128,
         bid_deadline: u64,
         reveal_deadline: u64,
     ) -> Result<u64, Error> {
@@ -61,9 +66,12 @@ impl SubRosaAuctionContract {
         seller.require_auth();
 
         let now = env.ledger().timestamp();
-        if bid_deadline <= now || reveal_deadline <= bid_deadline {
+        if asset_amount <= 0 || bid_deadline <= now || reveal_deadline <= bid_deadline {
             return Err(Error::InvalidTimeRange);
         }
+
+        let asset_client = token::Client::new(&env, &asset_token);
+        asset_client.transfer(&seller, &env.current_contract_address(), &asset_amount);
 
         let auction_id: u64 = env
             .storage()
@@ -75,6 +83,7 @@ impl SubRosaAuctionContract {
             id: auction_id,
             seller,
             asset_token,
+            asset_amount,
             bid_deadline,
             reveal_deadline,
             highest_bidder: None,
@@ -132,6 +141,7 @@ impl SubRosaAuctionContract {
             commitment_hash,
             collateral_locked: collateral_amount,
             is_revealed: false,
+            is_refunded: false,
         };
 
         env.storage().persistent().set(&DataKey::Bid(auction_id, bidder.clone()), &bid);
@@ -220,6 +230,94 @@ impl SubRosaAuctionContract {
             .persistent()
             .get(&DataKey::Bid(auction_id, bidder))
             .ok_or(Error::MissingBid)
+    }
+
+    pub fn finalize_auction(env: Env, auction_id: u64) -> Result<(), Error> {
+        Self::ensure_not_paused(&env)?;
+
+        let mut auction: Auction = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Auction(auction_id))
+            .ok_or(Error::AuctionNotFound)?;
+
+        if env.ledger().timestamp() < auction.reveal_deadline {
+            return Err(Error::SettlementNotOpen);
+        }
+        if auction.status == AuctionStatus::Settled {
+            return Err(Error::AlreadySettled);
+        }
+
+        let payment_token: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Token)
+            .ok_or(Error::NotInitialized)?;
+        let payment_client = token::Client::new(&env, &payment_token);
+        let asset_client = token::Client::new(&env, &auction.asset_token);
+
+        if let Some(winner) = auction.highest_bidder.clone() {
+            payment_client.transfer(
+                &env.current_contract_address(),
+                &auction.seller,
+                &auction.highest_bid,
+            );
+            asset_client.transfer(
+                &env.current_contract_address(),
+                &winner,
+                &auction.asset_amount,
+            );
+        } else {
+            asset_client.transfer(
+                &env.current_contract_address(),
+                &auction.seller,
+                &auction.asset_amount,
+            );
+        }
+
+        auction.status = AuctionStatus::Settled;
+        env.storage().persistent().set(&DataKey::Auction(auction_id), &auction);
+        Ok(())
+    }
+
+    pub fn claim_refund(env: Env, auction_id: u64, bidder: Address) -> Result<(), Error> {
+        Self::ensure_not_paused(&env)?;
+        bidder.require_auth();
+
+        let auction: Auction = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Auction(auction_id))
+            .ok_or(Error::AuctionNotFound)?;
+        if auction.status != AuctionStatus::Settled {
+            return Err(Error::SettlementNotOpen);
+        }
+        if auction.highest_bidder == Some(bidder.clone()) {
+            return Err(Error::CannotRefundWinner);
+        }
+
+        let mut bid: SealedBid = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Bid(auction_id, bidder.clone()))
+            .ok_or(Error::MissingBid)?;
+        if bid.is_refunded {
+            return Err(Error::AlreadyRefunded);
+        }
+
+        let payment_token: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Token)
+            .ok_or(Error::NotInitialized)?;
+        token::Client::new(&env, &payment_token).transfer(
+            &env.current_contract_address(),
+            &bidder,
+            &bid.collateral_locked,
+        );
+        bid.is_refunded = true;
+        env.storage().persistent().set(&DataKey::Bid(auction_id, bidder), &bid);
+        Ok(())
     }
 
     pub fn set_paused(env: Env, admin: Address, paused: bool) -> Result<(), Error> {

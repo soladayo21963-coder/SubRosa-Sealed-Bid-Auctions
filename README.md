@@ -30,8 +30,9 @@ The project is organized into a standard Soroban workspace:
 1. Seller creates an auction with bid and reveal deadlines.
 2. Bidders submit a sealed commitment and escrow collateral.
 3. Bidders reveal their amount/hash later in the reveal window.
-4. The contract validates the commitment and selects the highest valid bid.
-5. The system can be extended for settlement, payout, asset transfer, and winner finalization.
+4. After the reveal deadline, anyone can finalize the auction.
+5. The contract transfers the escrowed asset to the winner and the winning payment to the seller.
+6. Losing bidders claim their collateral refunds through an authenticated refund call.
 
 ## Security design
 
@@ -114,7 +115,7 @@ chmod +x scripts/deploy.sh
 
 ## Roadmap
 
-- add escrow settlement and asset transfer logic
+- add auction cancellation and dispute handling
 - add auction cancellation and dispute handling
 - add multi-token support
 - add seller dashboards and analytics

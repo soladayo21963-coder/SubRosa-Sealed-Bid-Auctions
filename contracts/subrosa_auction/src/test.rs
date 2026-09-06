@@ -19,6 +19,7 @@ fn test_sealed_bid_auction_lifecycle() {
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_address = token_contract.address();
     let sac_client = token::StellarAssetClient::new(&env, &token_address);
+    sac_client.mint(&seller, &1);
     sac_client.mint(&bidder, &100_000_000);
 
     let contract_id = env.register(SubRosaAuctionContract, ());
@@ -27,7 +28,7 @@ fn test_sealed_bid_auction_lifecycle() {
     client.initialize(&admin, &token_address);
 
     env.ledger().with_mut(|li| li.timestamp = 100);
-    let auction_id = client.create_auction(&seller, &token_address, &1000, &2000);
+    let auction_id = client.create_auction(&seller, &token_address, &1, &1000, &2000);
     assert_eq!(auction_id, 1);
 
     let salt = BytesN::from_array(&env, &[5u8; 32]);

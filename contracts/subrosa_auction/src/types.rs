@@ -25,6 +25,7 @@ pub struct Auction {
     pub id: u64,
     pub seller: Address,
     pub asset_token: Address,
+    pub asset_amount: i128,
     pub bid_deadline: u64,
     pub reveal_deadline: u64,
     pub highest_bidder: Option<Address>,
@@ -39,6 +40,7 @@ pub struct SealedBid {
     pub commitment_hash: BytesN<32>,
     pub collateral_locked: i128,
     pub is_revealed: bool,
+    pub is_refunded: bool,
 }
 
 impl Default for AuctionStatus {

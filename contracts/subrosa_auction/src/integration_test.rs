@@ -21,6 +21,7 @@ fn integration_reveal_and_highest_bid_tracking() {
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token = token_contract.address();
     let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&seller, &1);
     token_client.mint(&bidder_a, &1_000_000_000);
     token_client.mint(&bidder_b, &1_000_000_000);
 
@@ -29,7 +30,7 @@ fn integration_reveal_and_highest_bid_tracking() {
     client.initialize(&admin, &token);
 
     env.ledger().with_mut(|li| li.timestamp = 100);
-    let auction_id = client.create_auction(&seller, &token, &1_000, &2_000);
+    let auction_id = client.create_auction(&seller, &token, &1, &1_000, &2_000);
     assert_eq!(auction_id, 1);
 
     let salt_a = BytesN::from_array(&env, &[1u8; 32]);
@@ -65,4 +66,12 @@ fn integration_reveal_and_highest_bid_tracking() {
     let auction = client.get_auction(&auction_id);
     assert_eq!(auction.highest_bid, 950_000);
     assert_eq!(auction.highest_bidder, Some(bidder_b));
+
+    env.ledger().with_mut(|li| li.timestamp = 2_000);
+    client.finalize_auction(&auction_id);
+    client.claim_refund(&auction_id, &bidder_a);
+
+    let settled = client.get_auction(&auction_id);
+    assert_eq!(settled.status, crate::types::AuctionStatus::Settled);
+    assert_eq!(token_client.balance(&bidder_a), 1_000_000_000);
 }
