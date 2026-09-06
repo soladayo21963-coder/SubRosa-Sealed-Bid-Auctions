@@ -12,10 +12,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
       - run: cargo fmt --all -- --check
       - run: cargo test --workspace
-      - run: cargo install stellar-cli --locked
-      - run: stellar contract build
+      - name: Build contract WASM
+        run: cargo rustc --manifest-path=contracts/subrosa_auction/Cargo.toml --crate-type=cdylib --target=wasm32v1-none --release
+        env:
+          SOROBAN_SDK_BUILD_SYSTEM_SUPPORTS_SPEC_SHAKING_V2: "1"
 
   frontend:
     runs-on: ubuntu-latest
