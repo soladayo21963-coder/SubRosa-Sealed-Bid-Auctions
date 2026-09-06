@@ -1,8 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, token, Address, BytesN, Env,
-};
+use soroban_sdk::{contract, contracterror, contractimpl, token, Address, BytesN, Env};
 
 mod types;
 use types::*;
@@ -52,7 +50,9 @@ impl SubRosaAuctionContract {
         env.storage().instance().set(&DataKey::Token, &token);
         env.storage().instance().set(&DataKey::NextAuctionId, &1u64);
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.storage().instance().extend_ttl(THIRTY_DAYS_IN_LEDGERS, THIRTY_DAYS_IN_LEDGERS);
+        env.storage()
+            .instance()
+            .extend_ttl(THIRTY_DAYS_IN_LEDGERS, THIRTY_DAYS_IN_LEDGERS);
 
         Ok(())
     }
@@ -99,14 +99,18 @@ impl SubRosaAuctionContract {
             status: AuctionStatus::Bidding,
         };
 
-        env.storage().persistent().set(&DataKey::Auction(auction_id), &auction);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Auction(auction_id), &auction);
         env.storage().persistent().extend_ttl(
             &DataKey::Auction(auction_id),
             AUCTION_TTL_IN_LEDGERS,
             AUCTION_TTL_IN_LEDGERS,
         );
 
-        env.storage().instance().set(&DataKey::NextAuctionId, &(auction_id + 1));
+        env.storage()
+            .instance()
+            .set(&DataKey::NextAuctionId, &(auction_id + 1));
         Ok(auction_id)
     }
 
@@ -160,7 +164,9 @@ impl SubRosaAuctionContract {
             is_refunded: false,
         };
 
-        env.storage().persistent().set(&DataKey::Bid(auction_id, bidder.clone()), &bid);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bid(auction_id, bidder.clone()), &bid);
         env.storage().persistent().extend_ttl(
             &DataKey::Bid(auction_id, bidder),
             THIRTY_DAYS_IN_LEDGERS,
@@ -228,13 +234,17 @@ impl SubRosaAuctionContract {
         }
 
         bid.is_revealed = true;
-        env.storage().persistent().set(&DataKey::Bid(auction_id, bidder.clone()), &bid);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bid(auction_id, bidder.clone()), &bid);
 
         if secret_bid_amount > auction.highest_bid {
             auction.highest_bid = secret_bid_amount;
             auction.highest_bidder = Some(bidder.clone());
             auction.status = AuctionStatus::Reveal;
-            env.storage().persistent().set(&DataKey::Auction(auction_id), &auction);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Auction(auction_id), &auction);
         }
 
         Ok(())
@@ -298,7 +308,9 @@ impl SubRosaAuctionContract {
         }
 
         auction.status = AuctionStatus::Settled;
-        env.storage().persistent().set(&DataKey::Auction(auction_id), &auction);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Auction(auction_id), &auction);
         Ok(())
     }
 
@@ -334,13 +346,15 @@ impl SubRosaAuctionContract {
         };
         if refund_amount > 0 {
             token::Client::new(&env, &payment_token).transfer(
-            &env.current_contract_address(),
-            &bidder,
+                &env.current_contract_address(),
+                &bidder,
                 &refund_amount,
             );
         }
         bid.is_refunded = true;
-        env.storage().persistent().set(&DataKey::Bid(auction_id, bidder), &bid);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bid(auction_id, bidder), &bid);
         Ok(())
     }
 
