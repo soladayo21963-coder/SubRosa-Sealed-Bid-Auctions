@@ -10,5 +10,6 @@ export async function connectWallet(): Promise<string | null> {
     return null;
   }
 
-  return getAddress();
+  const result = await getAddress();
+  return result.address ?? null;
 }
