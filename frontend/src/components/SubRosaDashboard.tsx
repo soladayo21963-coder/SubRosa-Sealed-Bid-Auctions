@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { connectWallet } from "@/lib/freighter";
-import { createCommitment, submitSealedBid } from "@/lib/soroban";
+import { createCommitment, revealBid, submitSealedBid } from "@/lib/soroban";
 
 export default function SubRosaDashboard() {
   const [account, setAccount] = useState<string | null>(null);
   const [collateral, setCollateral] = useState("");
   const [auctionId, setAuctionId] = useState("1");
   const [bidAmount, setBidAmount] = useState("");
+  const [revealSalt, setRevealSalt] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,6 +17,22 @@ export default function SubRosaDashboard() {
     const addr = await connectWallet();
     if (addr) {
       setAccount(addr);
+    }
+  };
+
+  const handleReveal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage(null);
+    try {
+      if (!account) throw new Error("Connect Freighter before revealing a bid.");
+      const salt = revealSalt || localStorage.getItem(`subrosa:salt:${auctionId}:${account}`) || "";
+      const hash = await revealBid(account, BigInt(auctionId), BigInt(bidAmount), salt);
+      setMessage(`Bid revealed. Transaction: ${hash}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to reveal bid.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -69,7 +86,8 @@ export default function SubRosaDashboard() {
             Connect Freighter Wallet
           </button>
         ) : (
-          <form onSubmit={handleBid} className="space-y-6">
+          <>
+            <form onSubmit={handleBid} className="space-y-6">
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">Auction ID</label>
               <input
@@ -122,7 +140,24 @@ export default function SubRosaDashboard() {
               {loading ? "Submitting Commitment..." : "Submit Sealed Bid"}
             </button>
             {message && <p className="text-xs text-emerald-300 break-words">{message}</p>}
-          </form>
+            </form>
+            <form onSubmit={handleReveal} className="mt-8 space-y-4 border-t border-slate-800 pt-6">
+            <h2 className="text-sm font-semibold text-slate-200">Reveal committed bid</h2>
+            <input
+              value={revealSalt}
+              onChange={(e) => setRevealSalt(e.target.value)}
+              placeholder="Optional: paste the 64-character salt"
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-rose-500"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 border border-rose-700 text-rose-300 hover:bg-rose-950 font-semibold rounded-xl transition disabled:opacity-60"
+            >
+              Reveal Bid
+            </button>
+            </form>
+          </>
         )}
       </div>
     </main>

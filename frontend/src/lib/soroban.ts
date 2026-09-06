@@ -80,3 +80,29 @@ export async function submitSealedBid(
     ),
   );
 }
+
+function fromHex(value: string) {
+  if (!/^[0-9a-f]{64}$/i.test(value)) {
+    throw new Error("Reveal salt must be exactly 32 bytes in hexadecimal form.");
+  }
+  return Uint8Array.from(value.match(/.{2}/g)!, (byte) => parseInt(byte, 16));
+}
+
+export async function revealBid(
+  accountId: string,
+  auctionId: bigint,
+  bidAmount: bigint,
+  saltHex: string,
+) {
+  const contract = new Contract(getContractId());
+  return submitContractCall(
+    accountId,
+    contract.call(
+      "reveal_bid",
+      new Address(accountId).toScVal(),
+      nativeToScVal(auctionId, { type: "u64" }),
+      nativeToScVal(bidAmount, { type: "i128" }),
+      toBytes32(fromHex(saltHex)),
+    ),
+  );
+}
