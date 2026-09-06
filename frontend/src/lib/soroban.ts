@@ -10,7 +10,6 @@ import {
 } from "@stellar/stellar-sdk";
 import { assembleTransaction, Server } from "@stellar/stellar-sdk/rpc";
 import { signTransaction } from "@stellar/freighter-api";
-import { Buffer } from "buffer";
 
 const networkPassphrase = Networks.TESTNET;
 const rpcUrl = "https://soroban-testnet.stellar.org";
@@ -25,7 +24,7 @@ function getContractId() {
 }
 
 function toBytes32(value: Uint8Array) {
-  return xdr.ScVal.scvBytes(Buffer.from(value));
+  return xdr.ScVal.scvBytes(value);
 }
 
 export async function createCommitment(bidAmount: bigint, salt: Uint8Array, auctionId: bigint) {
