@@ -48,7 +48,7 @@ The contract follows secure Soroban practices:
 - Rust
 - Soroban SDK
 - Stellar Testnet deployment
-- Next.js 14
+- Next.js 16
 - TypeScript
 - Freighter wallet integration
 
@@ -101,9 +101,15 @@ npm run dev
 ### Deploy to Stellar Testnet
 
 ```bash
+export ADMIN_ADDRESS="your_funded_testnet_address"
+export PAYMENT_TOKEN_ID="your_collateral_token_contract_id"
 chmod +x scripts/deploy.sh
 ./scripts/deploy.sh
 ```
+
+The deployment requires a funded Stellar CLI identity named `admin`. The script
+deploys the WASM, initializes the contract, and writes the contract ID to
+`frontend/.env.local`. Never commit secret keys or `.env.local`.
 
 ## Security and best practices
 
@@ -115,7 +121,6 @@ chmod +x scripts/deploy.sh
 
 ## Roadmap
 
-- add auction cancellation and dispute handling
 - add auction cancellation and dispute handling
 - add multi-token support
 - add seller dashboards and analytics

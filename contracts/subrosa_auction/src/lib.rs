@@ -29,9 +29,11 @@ pub enum Error {
     SettlementNotOpen = 16,
     CannotRefundWinner = 17,
     AlreadyRefunded = 18,
+    DuplicateBid = 19,
 }
 
 const THIRTY_DAYS_IN_LEDGERS: u32 = 518_400;
+const MAX_AUCTION_DURATION_SECONDS: u64 = 2_592_000;
 
 #[contract]
 pub struct SubRosaAuctionContract;
@@ -66,7 +68,11 @@ impl SubRosaAuctionContract {
         seller.require_auth();
 
         let now = env.ledger().timestamp();
-        if asset_amount <= 0 || bid_deadline <= now || reveal_deadline <= bid_deadline {
+        if asset_amount <= 0
+            || bid_deadline <= now
+            || reveal_deadline <= bid_deadline
+            || reveal_deadline - now > MAX_AUCTION_DURATION_SECONDS
+        {
             return Err(Error::InvalidTimeRange);
         }
 
@@ -121,6 +127,14 @@ impl SubRosaAuctionContract {
             .persistent()
             .get(&DataKey::Auction(auction_id))
             .ok_or(Error::AuctionNotFound)?;
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Bid(auction_id, bidder.clone()))
+        {
+            return Err(Error::DuplicateBid);
+        }
 
         let now = env.ledger().timestamp();
         if now >= auction.bid_deadline {
@@ -200,7 +214,13 @@ impl SubRosaAuctionContract {
             return Err(Error::InvalidCommitment);
         }
 
-        let commitment_matches = Self::validate_commitment(&env, &bid.commitment_hash, &salt, secret_bid_amount);
+        let commitment_matches = Self::validate_commitment(
+            &env,
+            &bid.commitment_hash,
+            &salt,
+            secret_bid_amount,
+            auction_id,
+        );
         if !commitment_matches {
             return Err(Error::InvalidCommitment);
         }
@@ -281,7 +301,6 @@ impl SubRosaAuctionContract {
     }
 
     pub fn claim_refund(env: Env, auction_id: u64, bidder: Address) -> Result<(), Error> {
-        Self::ensure_not_paused(&env)?;
         bidder.require_auth();
 
         let auction: Auction = env
@@ -292,10 +311,6 @@ impl SubRosaAuctionContract {
         if auction.status != AuctionStatus::Settled {
             return Err(Error::SettlementNotOpen);
         }
-        if auction.highest_bidder == Some(bidder.clone()) {
-            return Err(Error::CannotRefundWinner);
-        }
-
         let mut bid: SealedBid = env
             .storage()
             .persistent()
@@ -310,11 +325,18 @@ impl SubRosaAuctionContract {
             .instance()
             .get(&DataKey::Token)
             .ok_or(Error::NotInitialized)?;
-        token::Client::new(&env, &payment_token).transfer(
+        let refund_amount = if auction.highest_bidder == Some(bidder.clone()) {
+            bid.collateral_locked - auction.highest_bid
+        } else {
+            bid.collateral_locked
+        };
+        if refund_amount > 0 {
+            token::Client::new(&env, &payment_token).transfer(
             &env.current_contract_address(),
             &bidder,
-            &bid.collateral_locked,
-        );
+                &refund_amount,
+            );
+        }
         bid.is_refunded = true;
         env.storage().persistent().set(&DataKey::Bid(auction_id, bidder), &bid);
         Ok(())
@@ -355,10 +377,12 @@ impl SubRosaAuctionContract {
         commitment_hash: &BytesN<32>,
         salt: &BytesN<32>,
         bid_amount: i128,
+        auction_id: u64,
     ) -> bool {
-        let mut payload = [0u8; 32 + 16];
+        let mut payload = [0u8; 16 + 32 + 8];
         let amount_bytes = bid_amount.to_be_bytes();
         let salt_bytes = salt.to_array();
+        let auction_bytes = auction_id.to_be_bytes();
 
         let mut idx = 0;
         for b in amount_bytes {
@@ -366,6 +390,10 @@ impl SubRosaAuctionContract {
             idx += 1;
         }
         for b in salt_bytes {
+            payload[idx] = b;
+            idx += 1;
+        }
+        for b in auction_bytes {
             payload[idx] = b;
             idx += 1;
         }

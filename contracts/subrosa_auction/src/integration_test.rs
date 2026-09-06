@@ -35,9 +35,10 @@ fn integration_reveal_and_highest_bid_tracking() {
 
     let salt_a = BytesN::from_array(&env, &[1u8; 32]);
     let salt_b = BytesN::from_array(&env, &[2u8; 32]);
-    let mut payload_a = [0u8; 48];
+    let mut payload_a = [0u8; 56];
     payload_a[..16].copy_from_slice(&750_000i128.to_be_bytes());
-    payload_a[16..].copy_from_slice(&salt_a.to_array());
+    payload_a[16..48].copy_from_slice(&salt_a.to_array());
+    payload_a[48..].copy_from_slice(&auction_id.to_be_bytes());
     let commitment_a = BytesN::from_array(
         &env,
         &env.crypto()
@@ -45,9 +46,10 @@ fn integration_reveal_and_highest_bid_tracking() {
             .to_array(),
     );
 
-    let mut payload_b = [0u8; 48];
+    let mut payload_b = [0u8; 56];
     payload_b[..16].copy_from_slice(&950_000i128.to_be_bytes());
-    payload_b[16..].copy_from_slice(&salt_b.to_array());
+    payload_b[16..48].copy_from_slice(&salt_b.to_array());
+    payload_b[48..].copy_from_slice(&auction_id.to_be_bytes());
     let commitment_b = BytesN::from_array(
         &env,
         &env.crypto()

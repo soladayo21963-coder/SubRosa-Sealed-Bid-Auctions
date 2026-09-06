@@ -32,9 +32,10 @@ fn test_sealed_bid_auction_lifecycle() {
     assert_eq!(auction_id, 1);
 
     let salt = BytesN::from_array(&env, &[5u8; 32]);
-    let mut payload = [0u8; 48];
+    let mut payload = [0u8; 56];
     payload[..16].copy_from_slice(&75_000_000i128.to_be_bytes());
-    payload[16..].copy_from_slice(&salt.to_array());
+    payload[16..48].copy_from_slice(&salt.to_array());
+    payload[48..].copy_from_slice(&auction_id.to_be_bytes());
     let commitment_hash = BytesN::from_array(
         &env,
         &env.crypto()

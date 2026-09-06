@@ -9,6 +9,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { signTransaction } from "@stellar/freighter-api";
+import { Buffer } from "buffer";
 
 const networkPassphrase = Networks.TESTNET;
 const rpcUrl = "https://soroban-testnet.stellar.org";
@@ -26,12 +27,22 @@ function toBytes32(value: Uint8Array) {
   return xdr.ScVal.scvBytes(Buffer.from(value));
 }
 
-export async function createCommitment(bidAmount: bigint, salt: Uint8Array) {
+export async function createCommitment(bidAmount: bigint, salt: Uint8Array, auctionId: bigint) {
+  if (bidAmount <= BigInt(0) || bidAmount > (BigInt(1) << BigInt(127)) - BigInt(1)) {
+    throw new Error("Bid amount is outside the supported i128 range.");
+  }
   const amount = new Uint8Array(16);
-  new DataView(amount.buffer).setBigInt64(0, bidAmount);
-  const payload = new Uint8Array(amount.length + salt.length);
+  const view = new DataView(amount.buffer);
+  const high = bidAmount >> BigInt(64);
+  const low = bidAmount & ((BigInt(1) << BigInt(64)) - BigInt(1));
+  view.setBigInt64(0, high);
+  view.setBigUint64(8, low);
+  const auction = new Uint8Array(8);
+  new DataView(auction.buffer).setBigUint64(0, auctionId);
+  const payload = new Uint8Array(amount.length + salt.length + auction.length);
   payload.set(amount, 0);
   payload.set(salt, amount.length);
+  payload.set(auction, amount.length + salt.length);
   return new Uint8Array(await crypto.subtle.digest("SHA-256", payload));
 }
 
@@ -59,7 +70,17 @@ async function submitContractCall(accountId: string, operation: xdr.Operation) {
   if (result.status === "ERROR") {
     throw new Error("Soroban transaction was rejected.");
   }
-  return result.hash;
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const transaction = await server.getTransaction(result.hash);
+    if (transaction.status === "SUCCESS") return result.hash;
+    if (transaction.status === "FAILED") {
+      throw new Error("Soroban transaction failed on-chain.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+
+  throw new Error("Transaction submitted but confirmation timed out.");
 }
 
 export async function submitSealedBid(

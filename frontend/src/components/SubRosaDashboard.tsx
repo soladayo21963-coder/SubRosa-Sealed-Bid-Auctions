@@ -51,12 +51,12 @@ export default function SubRosaDashboard() {
         throw new Error("Collateral must be greater than or equal to the bid.");
       }
       const salt = crypto.getRandomValues(new Uint8Array(32));
-      const commitment = await createCommitment(amount, salt);
+      const commitment = await createCommitment(amount, salt, BigInt(auctionId));
+      const hash = await submitSealedBid(account, BigInt(auctionId), commitment, locked);
       localStorage.setItem(
         `subrosa:salt:${auctionId}:${account}`,
         Array.from(salt, (byte) => byte.toString(16).padStart(2, "0")).join(""),
       );
-      const hash = await submitSealedBid(account, BigInt(auctionId), commitment, locked);
       setMessage(`Commitment submitted. Transaction: ${hash}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to submit commitment.");
