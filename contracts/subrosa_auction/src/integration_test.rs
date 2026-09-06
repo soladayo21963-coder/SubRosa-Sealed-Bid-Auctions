@@ -34,12 +34,29 @@ fn integration_reveal_and_highest_bid_tracking() {
 
     let salt_a = BytesN::from_array(&env, &[1u8; 32]);
     let salt_b = BytesN::from_array(&env, &[2u8; 32]);
-    let commitment_a = BytesN::from_array(&env, &[10u8; 32]);
-    let commitment_b = BytesN::from_array(&env, &[11u8; 32]);
+    let mut payload_a = [0u8; 48];
+    payload_a[..16].copy_from_slice(&750_000i128.to_be_bytes());
+    payload_a[16..].copy_from_slice(&salt_a.to_array());
+    let commitment_a = BytesN::from_array(
+        &env,
+        &env.crypto()
+            .sha256(&soroban_sdk::Bytes::from_array(&env, &payload_a))
+            .to_array(),
+    );
+
+    let mut payload_b = [0u8; 48];
+    payload_b[..16].copy_from_slice(&950_000i128.to_be_bytes());
+    payload_b[16..].copy_from_slice(&salt_b.to_array());
+    let commitment_b = BytesN::from_array(
+        &env,
+        &env.crypto()
+            .sha256(&soroban_sdk::Bytes::from_array(&env, &payload_b))
+            .to_array(),
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 250);
     client.submit_sealed_bid(&bidder_a, &auction_id, &commitment_a, &800_000);
-    client.submit_sealed_bid(&bidder_b, &auction_id, &commitment_b, &900_000);
+    client.submit_sealed_bid(&bidder_b, &auction_id, &commitment_b, &1_000_000);
 
     env.ledger().with_mut(|li| li.timestamp = 1_500);
     client.reveal_bid(&bidder_a, &auction_id, &750_000, &salt_a);
