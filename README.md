@@ -68,6 +68,9 @@ subrosa_auction/
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── SECURITY.md
+│   ├── AUDIT_CHECKLIST.md
+│   ├── AUDIT_HANDOFF.md
+│   └── TESTNET_DEMO.md
 ├── scripts/
 │   └── deploy.sh
 ├── frontend/
@@ -111,6 +114,11 @@ The deployment requires a funded Stellar CLI identity named `admin`. The script
 deploys the WASM, initializes the contract, and writes the contract ID to
 `frontend/.env.local`. Never commit secret keys or `.env.local`.
 
+The recorded Testnet deployment and transaction evidence are documented in
+[docs/TESTNET_DEMO.md](docs/TESTNET_DEMO.md). The deployed contract is a
+historical Testnet demonstration and must not be confused with a fresh deploy
+of a later source revision.
+
 ## Security and best practices
 
 - secure by design with explicit auth and validation
@@ -118,6 +126,13 @@ deploys the WASM, initializes the contract, and writes the contract ID to
 - test-first development for core lifecycle flows
 - modern UI patterns and wallet integration
 - clear documentation for deployment and auditing
+
+## Audit status
+
+This project has an internal review and a Testnet exercise, but it has not been
+independently audited. Use [docs/AUDIT_HANDOFF.md](docs/AUDIT_HANDOFF.md) as the
+scope package for an external Soroban security reviewer. Do not use the
+protocol with mainnet funds before independent review.
 
 ## Roadmap
 
